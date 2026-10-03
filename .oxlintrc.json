@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "import/no-self-import": "off",
+    "no-underscore-dangle": "off"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["src/keychain.jxa.js"]
+}

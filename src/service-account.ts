@@ -1,0 +1,195 @@
+import { Effect, Redacted, Schema } from "effect"
+import { Auth } from "./auth.js"
+import { Create } from "./create.js"
+import { Op } from "./op.js"
+
+const manageUrl = "https://start.1password.com/developer-tools/active"
+const builtInVaults = ["personal", "private", "employee", "shared"]
+const { fail } = Op
+
+// Administrative operations always use desktop authentication.
+const admin = <S extends Schema.Constraint>(
+  schema: S,
+  args: ReadonlyArray<string>,
+  account: string | undefined,
+  failure: string,
+) => Op.json(schema, args, { account, failure }).pipe(Auth.asDesktop)
+
+const parseToken = (raw: string) => {
+  const token = raw.replace(/\r?\n$/, "")
+  return /^ops_[^\s]+$/.test(token)
+    ? Effect.succeed(Redacted.make(token))
+    : Effect.fail(fail("No valid service-account token was received (details suppressed)"))
+}
+
+export interface SetupOptions {
+  readonly name: string
+  readonly vault: string
+  readonly saveVault: string
+  readonly account?: string | undefined
+  readonly createVault: boolean
+  readonly write: boolean
+  readonly expiresIn?: string | undefined
+}
+
+// Every remote step is checked before the next; a once-returned token is saved
+// before anything else can fail, so partial setups are recoverable, never retried.
+export const setup = Effect.fn("ServiceAccount.setup")(function* (options: SetupOptions) {
+  const name = options.name.trim()
+  const vaultName = options.vault.trim()
+  const saveVault = options.saveVault.trim()
+  const { account } = options
+  if (
+    !name ||
+    !vaultName ||
+    !saveVault ||
+    name.startsWith("-") ||
+    vaultName.startsWith("-") ||
+    /[\r\n]/.test(name + vaultName + saveVault)
+  ) {
+    return yield* fail("A non-empty account name, automation vault, and backup vault are required")
+  }
+  if (builtInVaults.includes(vaultName.toLowerCase())) {
+    return yield* fail(
+      "Choose a dedicated automation vault; built-in personal/shared vaults cannot be granted to service accounts",
+    )
+  }
+  if (options.expiresIn !== undefined && !/^[1-9]\d*[smhdw]$/.test(options.expiresIn)) {
+    return yield* fail("--expires-in must be a positive duration such as 90d")
+  }
+  yield* Auth.requireEmpty
+
+  const vaults = yield* admin(
+    Schema.Array(Auth.Vault),
+    ["vault", "list", "--format", "json"],
+    account,
+    "Could not read administrator vault metadata; nothing was created",
+  )
+  const select = (value: string) => vaults.filter((vault) => vault.id === value || vault.name === value)
+  const backups = select(saveVault)
+  const backup = backups[0]
+  if (backups.length !== 1 || backup === undefined)
+    return yield* fail("The backup vault must resolve to one existing vault; nothing was created")
+  const title = `1Password ${name} Service Account Token`
+  const backupCheckFailure = "Could not check the token backup destination; nothing was created"
+  if (yield* Create.titleTaken(backup.id, title, account, backupCheckFailure).pipe(Auth.asDesktop)) {
+    return yield* fail(
+      "A token backup with this title already exists; inspect it before creating another service account",
+    )
+  }
+
+  const selected = select(vaultName)
+  if (selected.length > 1) return yield* fail("Automation vault name is ambiguous; specify its ID")
+  let vault = selected[0]
+  if (vault === undefined) {
+    if (!options.createVault) return yield* fail("Automation vault does not exist; use --create-vault to create it")
+    vault = yield* admin(
+      Auth.Vault,
+      ["vault", "create", vaultName, "--format", "json"],
+      account,
+      "Vault creation is unverified; inspect your vaults before retrying",
+    )
+    if (vault.name !== vaultName)
+      return yield* fail("The created vault name did not match; inspect your vaults before retrying")
+  }
+  if (builtInVaults.includes(vault.name.toLowerCase()) || vault.id === backup.id) {
+    return yield* fail("Use a dedicated automation vault and a separate backup vault for its service-account token")
+  }
+
+  const grant = `${vault.id}:read_items${options.write ? ",write_items" : ""}`
+  const uncertain =
+    "Service-account creation is unverified. Do not retry setup; inspect service accounts in 1Password (details suppressed)"
+  const token = yield* Op.op(
+    [
+      "service-account",
+      "create",
+      name,
+      "--vault",
+      grant,
+      "--raw",
+      ...(options.expiresIn ? ["--expires-in", options.expiresIn] : []),
+    ],
+    { account, failure: uncertain },
+  ).pipe(
+    Auth.asDesktop,
+    Effect.flatMap(parseToken),
+    Effect.mapError(() => fail(uncertain)),
+  )
+  yield* Auth.saveToken(token)
+  const settings: Auth.Settings = { name, vaults: [{ id: vault.id, name: vault.name }] }
+  yield* Auth.saveSettings(settings)
+
+  const visible = yield* Auth.visibleVaults(token).pipe(
+    Effect.mapError(() =>
+      fail(
+        "The created account could not list its vaults. Its token is saved locally; inspect service-account status, do not repeat setup",
+      ),
+    ),
+  )
+  if (visible.length !== 1 || visible[0]?.id !== vault.id) {
+    return yield* fail(
+      "The created account's vault access did not match. Its token is saved locally; inspect service-account status, do not repeat setup",
+    )
+  }
+  const saved = yield* Create.storeApiCredential({ title, vault: backup.id, account }, token).pipe(
+    Auth.asDesktop,
+    Effect.mapError(() =>
+      fail(
+        "The account is saved locally, but its 1Password token backup is unverified. Inspect the backup title with --desktop find; do not repeat setup",
+      ),
+    ),
+  )
+  yield* Auth.saveSettings({ ...settings, tokenRef: saved.ref })
+  return {
+    configured: true,
+    name,
+    vaults: visible,
+    write: options.write,
+    tokenRef: saved.ref,
+    storage: "macos-keychain",
+    verified: true,
+  }
+})
+
+export const connect = Effect.fn("ServiceAccount.connect")(function* (source: Op.Source, name: string) {
+  if (!name.trim()) return yield* fail("A non-empty account name is required")
+  yield* Auth.requireEmpty
+  const token = yield* Op.privateInput(source, "service-account token", "nothing was saved").pipe(
+    Effect.flatMap(parseToken),
+  )
+  const vaults = yield* Auth.visibleVaults(token)
+  yield* Auth.saveToken(token)
+  yield* Auth.saveSettings({ name: name.trim(), vaults })
+  return { configured: true, name: name.trim(), vaults, storage: "macos-keychain", verified: true }
+})
+
+export const status = Effect.gen(function* () {
+  const saved = yield* Auth.settings
+  if (!saved) return { configured: false, manageUrl }
+  const vaults = yield* Auth.visibleVaults(yield* Auth.keychainToken)
+  return {
+    configured: true,
+    name: saved.name,
+    vaults,
+    tokenRef: saved.tokenRef,
+    storage: "macos-keychain",
+    verified: true,
+    manageUrl,
+  }
+})
+
+export const recover = Effect.fn("ServiceAccount.recover")(function* (name: string) {
+  if (!name.trim()) return yield* fail("A non-empty account name is required")
+  const saved = yield* Auth.settings
+  const vaults = yield* Auth.visibleVaults(yield* Auth.keychainToken)
+  yield* Auth.saveSettings({
+    name: saved?.name ?? name.trim(),
+    vaults,
+    ...(saved?.tokenRef ? { tokenRef: saved.tokenRef } : {}),
+  })
+  return { configured: true, vaults, storage: "macos-keychain", verified: true }
+})
+
+export const forget = Auth.forget
+
+export * as ServiceAccount from "./service-account.js"
