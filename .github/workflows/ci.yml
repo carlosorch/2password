@@ -17,3 +17,5 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run check
+      # npm publish silently rewrites invalid package.json fields (it once dropped our bin).
+      - run: npm pkg fix && git diff --exit-code package.json

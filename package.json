@@ -1,6 +1,6 @@
 {
   "name": "2password",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "1Password for coding agents: find, use, and save secrets without exposing them.",
   "keywords": [
     "1password",
@@ -18,7 +18,7 @@
     "url": "git+https://github.com/kitlangton/2password.git"
   },
   "bin": {
-    "2password": "./bin/2password"
+    "2password": "bin/2password"
   },
   "files": [
     "bin",
