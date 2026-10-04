@@ -1,6 +1,6 @@
 {
   "name": "2password",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "1Password for coding agents: find, use, and save secrets without exposing them.",
   "keywords": [
     "1password",
