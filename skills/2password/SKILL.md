@@ -88,6 +88,17 @@ After setup, every command authenticates silently with a token stored in macOS K
 - Logins use the built-in `password` field and a title like `<Provider>` or `<Provider> <Account>`.
 - The vault shows who owns the item, so don't repeat the vault name in the title. Keep one current secret per item.
 
+## Report anything that goes poorly
+
+2password is built for agents, so your experience is how it improves. Speak up if a command fails unexpectedly or you had to work around it. The same goes for more approval prompts than expected, output that's awkward or too verbose, or anything in this skill that's unclear or wrong. Tell the user, and offer to open an issue. It posts publicly from their GitHub account, so get their okay first.
+
+```bash
+gh issue list --repo kitlangton/2password --state all --search "<keywords>"   # add to an existing issue instead of duplicating it
+gh issue create --repo kitlangton/2password --title "<what went wrong>" --body "<details>"
+```
+
+Include `2password --version`, `op --version`, the OS, the command you ran, and what you expected versus what happened. Never include secret values, item titles, vault or account names, or `op://` references. Replace them with placeholders.
+
 ## Everything else
 
 Use raw `op` for other item categories, editing, moving, sharing, deleting, and vault management. Pass plaintext through JSON templates on stdin, never in arguments. After discovery, refer to items and vaults by ID.
