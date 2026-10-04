@@ -10,7 +10,7 @@ description: Use for any password, API key, token, credential, secret, or 1Passw
 ## Rules
 
 - Never print, log, summarize, or repeat secret values. Pass `op://` references around instead.
-- Any 1Password call may show the user an approval prompt. Batch work into one command: many queries in one `find`, many references in one env file.
+- Any 1Password call may show the user an approval prompt, and each new shell you open can need a fresh approval. Batch a task's work into as few commands as possible: many queries in one `find`, many references in one env file run with `env run`.
 - Never run `op whoami` or any other preflight check. Just run the command; the desktop app authorizes it when needed.
 - Never retry a write that failed or reported "unverified". Run `find` first to check whether it already happened.
 
@@ -21,7 +21,7 @@ description: Use for any password, API key, token, credential, secret, or 1Passw
 2password find stripe --vault Work --account my.1password.com
 ```
 
-Returns titles, vaults, field names, and `op://` references. It never returns values.
+Each match appears once as `{ ref, title, kind }`, with `queries` when you asked several. A query that matches nothing returns `suggestions` with close titles (typos included) from the same lookup. Use those rather than searching again or listing whole vaults. It never returns values.
 
 ## Use credentials
 
@@ -99,7 +99,7 @@ gh issue list --repo kitlangton/2password --state all --search "<keywords>"   # 
 gh issue create --repo kitlangton/2password --title "<what went wrong>" --body "<details>"
 ```
 
-Include `2password --version`, `op --version`, the OS, the command you ran, and what you expected versus what happened. Never include secret values, item titles, vault or account names, or `op://` references. Replace them with placeholders.
+Include the output of `2password doctor` (versions and setup; it never prompts and is safe to share), the command you ran, and what you expected versus what happened. Never include secret values, item titles, vault or account names, or `op://` references. Replace them with placeholders.
 
 ## Everything else
 

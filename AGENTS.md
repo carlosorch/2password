@@ -1,6 +1,19 @@
 # 2password
 
-A Bun + Effect v4 CLI over 1Password's `op`. Goal: agents use secrets without seeing them, with the fewest possible 1Password prompts.
+A Bun + Effect v4 CLI over 1Password's `op`.
+
+## Purpose
+
+Let a coding agent use credentials as freely as a trusted teammate would, without the human babysitting it and without the secret ever entering the model's context. `op` was built for a person at a terminal; agents make many quick calls from fresh shells, and everything they read lands in a transcript. 2password adapts `op` to that user.
+
+Optimize, in order:
+
+1. **Human interruptions per task.** At most one approval per task, and zero with a service account. Every prompt, unlock, or stuck app counts against us.
+2. **Plaintext in the model's context.** Zero by default. Agents pass `op://` references; revealing a value is always an explicit, named command.
+3. **Agent success on the first try.** One obvious command per goal, compact JSON, and errors that say what to do next.
+4. **Trustworthy writes.** Never lose, duplicate, or silently overwrite a credential.
+
+Not goals: being a vault, being a sandbox (a child given a secret by `run` can do anything with it), or replacing `op` for administration. Keep the interface small: it is the product.
 
 ```sh
 bun install
@@ -20,7 +33,8 @@ src/auth.ts                 which credentials op runs with (desktop, env token, 
 src/keychain.jxa.js         native Keychain bridge, run through osascript; the token crosses stdin only
 src/credential.win.ps1      Windows counterpart: DPAPI-encrypted token file, run through powershell; stdin/stdout only
 src/without-token.ts        Windows replacement for `env -u OP_SERVICE_ACCOUNT_TOKEN` in run and env run
-src/discover.ts             find, inventory, audit
+src/discover.ts             find (with near-miss suggestions), inventory, audit
+src/doctor.ts               doctor: versions and setup, never authenticates
 src/env.ts                  read, run, env write/resolve/run
 src/create.ts               create api-credential
 src/password.ts             password compare/update
