@@ -52,27 +52,46 @@ export const make = Effect.fn("Auth.make")(function* (desktop: boolean) {
 
 // One fixed Keychain identity holds the token, via the native Security API (keychain.jxa.js).
 // The token crosses only stdin; it never reaches argv, the settings file, or diagnostics.
-const keychain = (operation: "get" | "exists" | "add" | "remove", message: string, token?: Redacted.Redacted<string>) =>
-  Op.capture(
-    ChildProcess.make(
-      "osascript",
-      [
-        "-l",
-        "JavaScript",
-        fileURLToPath(new URL("./keychain.jxa.js", import.meta.url)),
-        operation,
-        "dev.kitlangton.2password",
-        "service-account",
-      ],
-      {
-        stdin: token === undefined ? "ignore" : Stream.make(new TextEncoder().encode(Redacted.value(token))),
-        stderr: "ignore",
-      },
-    ),
+// On Windows the same four operations run against a DPAPI-encrypted file (credential.win.ps1).
+const keychain = (
+  operation: "get" | "exists" | "add" | "remove",
+  message: string,
+  token?: Redacted.Redacted<string>,
+) => {
+  const identity = [operation, "dev.kitlangton.2password", "service-account"]
+  const options = {
+    stdin: token === undefined ? ("ignore" as const) : Stream.make(new TextEncoder().encode(Redacted.value(token))),
+    stderr: "ignore" as const,
+  }
+  return Op.capture(
+    Op.windows
+      ? ChildProcess.make(
+          "powershell",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            fileURLToPath(new URL("./credential.win.ps1", import.meta.url)),
+            ...identity,
+          ],
+          options,
+        )
+      : ChildProcess.make(
+          "osascript",
+          ["-l", "JavaScript", fileURLToPath(new URL("./keychain.jxa.js", import.meta.url)), ...identity],
+          options,
+        ),
     message,
   )
+}
 
-const requireMacOS = (message: string) => (process.platform === "darwin" ? Effect.void : Effect.fail(fail(message)))
+// Reported by service-account commands so callers can tell where the token lives.
+export const storage = Op.windows ? "windows-dpapi" : "macos-keychain"
+
+const requireMacOS = (message: string) =>
+  process.platform === "darwin" || Op.windows ? Effect.void : Effect.fail(fail(message))
 
 export const keychainToken = requireMacOS(
   "Saved service accounts require macOS Keychain; use OP_SERVICE_ACCOUNT_TOKEN on other platforms",
@@ -95,7 +114,8 @@ export const saveToken = Effect.fn("Auth.saveToken")(function* (token: Redacted.
 })
 
 const settingsPath = Effect.gen(function* () {
-  const home = yield* Config.String("HOME")
+  // PowerShell and cmd usually have no HOME on Windows; fall back to USERPROFILE.
+  const home = yield* Config.String("HOME").pipe(Config.orElse(() => Config.String("USERPROFILE")))
   return (yield* Path.Path).join(home, ".config", "2password", "service-account.json")
 }).pipe(Effect.mapError(() => fail("Could not locate the 2password settings directory")))
 

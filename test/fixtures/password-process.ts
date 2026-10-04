@@ -1,7 +1,8 @@
+import { normalize } from "./platform.js"
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 
 const secret = "FICTIONAL-PASSWORD-ONLY\n"
-const [command, ...args] = process.argv.slice(2)
+const [command, ...args] = normalize(process.argv.slice(2))
 const calls = process.env.TEST_CALLS!
 const state = `${calls}.state`
 const scenario = process.env.TEST_SCENARIO

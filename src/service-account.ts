@@ -146,7 +146,7 @@ export const setup = Effect.fn("ServiceAccount.setup")(function* (options: Setup
     vaults: visible,
     write: options.write,
     tokenRef: saved.ref,
-    storage: "macos-keychain",
+    storage: Auth.storage,
     verified: true,
   }
 })
@@ -160,7 +160,7 @@ export const connect = Effect.fn("ServiceAccount.connect")(function* (source: Op
   const vaults = yield* Auth.visibleVaults(token)
   yield* Auth.saveToken(token)
   yield* Auth.saveSettings({ name: name.trim(), vaults })
-  return { configured: true, name: name.trim(), vaults, storage: "macos-keychain", verified: true }
+  return { configured: true, name: name.trim(), vaults, storage: Auth.storage, verified: true }
 })
 
 export const status = Effect.gen(function* () {
@@ -172,7 +172,7 @@ export const status = Effect.gen(function* () {
     name: saved.name,
     vaults,
     tokenRef: saved.tokenRef,
-    storage: "macos-keychain",
+    storage: Auth.storage,
     verified: true,
     manageUrl,
   }
@@ -187,7 +187,7 @@ export const recover = Effect.fn("ServiceAccount.recover")(function* (name: stri
     vaults,
     ...(saved?.tokenRef ? { tokenRef: saved.tokenRef } : {}),
   })
-  return { configured: true, vaults, storage: "macos-keychain", verified: true }
+  return { configured: true, vaults, storage: Auth.storage, verified: true }
 })
 
 export const forget = Auth.forget

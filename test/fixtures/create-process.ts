@@ -1,3 +1,4 @@
+import { normalize } from "./platform.js"
 import { appendFileSync, fstatSync, readFileSync } from "node:fs"
 
 // Fictional inputs only. No fixture ever reads the system clipboard or invokes op.
@@ -9,7 +10,7 @@ export const notes = "Fixture operational context"
 export const url = "https://example.invalid/api"
 
 if (import.meta.main) {
-  const [command, ...args] = process.argv.slice(2)
+  const [command, ...args] = normalize(process.argv.slice(2))
   const scenario = process.env.TEST_SCENARIO
   const callsFile = process.env.TEST_CALLS
   if (callsFile === undefined) throw new Error("Mock calls path is required")

@@ -25,7 +25,7 @@ Run `2password --help` to see all commands.
 ## Fewer prompts
 
 - **One prompt per command.** `find` with many queries and env files with many references each need a single 1Password approval.
-- **No prompts at all.** Give your agent its own vault and a service account whose token lives in macOS Keychain:
+- **No prompts at all.** Give your agent its own vault and a service account whose token lives in macOS Keychain, or on Windows in a file encrypted for your user (DPAPI):
 
   ```sh
   2password service-account setup --vault Automation --create-vault --write --save-vault Personal

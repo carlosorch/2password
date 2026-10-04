@@ -37,7 +37,7 @@ const run = async (args: ReadonlyArray<string>, scenario = "success", input = `$
 }
 
 describe("create api-credential", () => {
-  it.skipIf(process.platform !== "darwin")(
+  it.skipIf(process.platform !== "darwin" && process.platform !== "win32")(
     "creates from a mocked clipboard and verifies without changing it",
     async () => {
       const result = await run([...destination, "--clipboard"])
@@ -131,16 +131,19 @@ describe("create api-credential", () => {
   }
 
   for (const scenario of ["clipboard-error", "clipboard-empty"]) {
-    it.skipIf(process.platform !== "darwin")(`fails safely on ${scenario}`, async () => {
-      const result = await run([...destination, "--clipboard"], scenario)
-      assert.notStrictEqual(result.code, 0)
-      assert.strictEqual(result.stdout, "")
-      assert.match(result.stderr, /nothing was created/)
-      assert.deepStrictEqual(
-        result.calls.map(({ command }) => command),
-        ["pbpaste"],
-      )
-    })
+    it.skipIf(process.platform !== "darwin" && process.platform !== "win32")(
+      `fails safely on ${scenario}`,
+      async () => {
+        const result = await run([...destination, "--clipboard"], scenario)
+        assert.notStrictEqual(result.code, 0)
+        assert.strictEqual(result.stdout, "")
+        assert.match(result.stderr, /nothing was created/)
+        assert.deepStrictEqual(
+          result.calls.map(({ command }) => command),
+          ["pbpaste"],
+        )
+      },
+    )
   }
 
   it("refuses duplicate titles regardless of case or surrounding whitespace", async () => {

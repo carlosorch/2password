@@ -68,7 +68,7 @@ The command refuses logins that have passkeys or unnamed imported fields. Use `-
 
 Treat findings as candidates for review. Propose renames or changes, and only make them after the user approves.
 
-## No prompts: service account (macOS)
+## No prompts: service account (macOS, Windows)
 
 If the user is tired of approval prompts, suggest a service account. Only set one up when the user asks.
 
@@ -76,7 +76,7 @@ If the user is tired of approval prompts, suggest a service account. Only set on
 2password service-account setup --vault Automation --create-vault --write --save-vault Personal
 ```
 
-After setup, every command authenticates silently with a token stored in macOS Keychain, but it can only reach the Automation vault. Keep the credentials agents use in that vault.
+After setup, every command authenticates silently with a token stored in macOS Keychain (on Windows, a DPAPI-encrypted file under `%LOCALAPPDATA%`), but it can only reach the Automation vault. On Windows, any process running as the user can decrypt that file, so the vault's narrow scope is the real boundary. Keep the credentials agents use in that vault.
 
 - `2password --desktop <command>` uses the normal desktop login, for example to reach other vaults.
 - `service-account status | connect --clipboard | recover | forget`. `forget` removes only this Mac's copy; it doesn't revoke the account.

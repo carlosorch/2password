@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest"
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { fixture as fakeFrom, sandbox } from "./sandbox.js"
+import { bun, fixture as fakeFrom, sandbox } from "./sandbox.js"
 
 const token = "ops_fictional_service_account_sentinel"
 const setupArgs = [
@@ -48,7 +48,7 @@ const fixture = async () => {
   return { directory, settingsFile, settings, run, close: box.close }
 }
 
-describe.skipIf(process.platform !== "darwin")("service-account CLI", () => {
+describe.skipIf(process.platform !== "darwin" && process.platform !== "win32")("service-account CLI", () => {
   it("sets up, backs up, automatically authenticates, overrides with desktop, and forgets locally", async () => {
     const f = await fixture()
     try {
@@ -58,6 +58,10 @@ describe.skipIf(process.platform !== "darwin")("service-account CLI", () => {
         OP_CONNECT_HOST: "https://example.invalid",
       })
       assert.strictEqual(setup.code, 0, setup.stderr)
+      assert.strictEqual(
+        JSON.parse(setup.stdout).storage,
+        process.platform === "win32" ? "windows-dpapi" : "macos-keychain",
+      )
       const receipt = JSON.parse(setup.stdout)
       assert.strictEqual(receipt.verified, true)
       assert.strictEqual(receipt.tokenRef, `op://${"p".repeat(26)}/${"i".repeat(26)}/credential`)
@@ -184,15 +188,12 @@ describe.skipIf(process.platform !== "darwin")("service-account CLI", () => {
         "--desktop",
       ])
       assert.strictEqual(run.code, 7)
-      assert.deepStrictEqual(run.op[0]?.args, [
-        "run",
-        "--",
-        "env",
-        "-u",
-        "OP_SERVICE_ACCOUNT_TOKEN",
-        "example-cli",
-        "--desktop",
-      ])
+      // Windows has no `env -u`; a Bun helper removes the token there.
+      const withoutToken =
+        process.platform === "win32"
+          ? [bun, join(import.meta.dirname, "..", "src", "without-token.ts")]
+          : ["env", "-u", "OP_SERVICE_ACCOUNT_TOKEN"]
+      assert.deepStrictEqual(run.op[0]?.args, ["run", "--", ...withoutToken, "example-cli", "--desktop"])
       await rm(f.settingsFile)
       const recovered = await f.run(["service-account", "recover"])
       assert.strictEqual(recovered.code, 0, recovered.stderr)

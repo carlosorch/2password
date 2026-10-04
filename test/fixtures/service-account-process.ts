@@ -1,3 +1,4 @@
+import { normalize } from "./platform.js"
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -13,7 +14,7 @@ const itemId = "i".repeat(26)
 const automation = { id: automationId, name: "Automation" }
 const personal = { id: personalId, name: "Personal" }
 const scenario = process.env.TEST_SCENARIO
-const [command, ...args] = process.argv.slice(2)
+const [command, ...args] = normalize(process.argv.slice(2))
 const option = (flag: string) => args[args.indexOf(flag) + 1]
 const record = (event: unknown) => appendFileSync(calls, `${JSON.stringify(event)}\n`)
 record({

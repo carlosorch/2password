@@ -18,6 +18,8 @@ src/cli.ts                  command table: flags -> module call -> JSON on stdou
 src/op.ts                   the subprocess seam: op / json / exec, privateInput, Failure, Credentials
 src/auth.ts                 which credentials op runs with (desktop, env token, Keychain token) and their local storage
 src/keychain.jxa.js         native Keychain bridge, run through osascript; the token crosses stdin only
+src/credential.win.ps1      Windows counterpart: DPAPI-encrypted token file, run through powershell; stdin/stdout only
+src/without-token.ts        Windows replacement for `env -u OP_SERVICE_ACCOUNT_TOKEN` in run and env run
 src/discover.ts             find, inventory, audit
 src/env.ts                  read, run, env write/resolve/run
 src/create.ts               create api-credential
@@ -25,7 +27,7 @@ src/password.ts             password compare/update
 src/service-account.ts      service-account setup/connect/status/recover/forget
 src/arguments.ts            keeps arguments after `--` away from the flag parser
 skills/2password/SKILL.md   the agent skill we ship; keep it in sync with the CLI
-test/sandbox.ts             runs the real CLI against fake executables
+test/sandbox.ts             runs the real CLI against fake executables (on Windows via test/shim.ts and Git's sh)
 ```
 
 ## Invariants
@@ -45,7 +47,7 @@ These are security properties. Do not weaken them.
 - Put logic in a module function that returns a plain object and fails with `new Op.Failure({ message })`. In `cli.ts`, only parse flags and `print` the result.
 - Test through `sandbox()` with a fake `op` (see `test/fixtures/`). Assert the exact op calls, and assert that fictional sentinel secrets never appear in stdout, stderr, or recorded calls.
 - For a user-facing change, update `skills/2password/SKILL.md`. Update `README.md` only if the quick start changes; keep it short.
-- `bun run test:keychain` is an opt-in macOS test against the real Keychain, using a disposable item.
+- `bun run test:keychain` is an opt-in test against the real Keychain (macOS) or DPAPI store (Windows), using a disposable item.
 
 ## Release
 

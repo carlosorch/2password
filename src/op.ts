@@ -1,5 +1,6 @@
 import { Context, Effect, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { fileURLToPath } from "node:url"
 
 export class Failure extends Schema.TaggedError<Failure>()("Failure", { message: Schema.String }) {}
 
@@ -43,20 +44,41 @@ export const capture = (command: ChildProcess.Command, message: string) =>
 
 export type Source = "clipboard" | "stdin"
 
+export const windows = process.platform === "win32"
+
+// Windows has no pbpaste or cat. PowerShell writes the clipboard as UTF-8 without a trailing newline;
+// stdin is read in-process so no extra executable is needed.
+const clipboardCommand = () =>
+  windows
+    ? ChildProcess.make(
+        "powershell",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "[Console]::OutputEncoding = [Text.Encoding]::UTF8; $v = Get-Clipboard -Raw; if ($null -ne $v) { [Console]::Out.Write($v) }",
+        ],
+        { stdin: "ignore", stderr: "ignore" },
+      )
+    : ChildProcess.make("pbpaste", [], { stdin: "ignore", stderr: "ignore" })
+
+const readStdin = (message: string) => Effect.tryPromise({ try: () => Bun.stdin.text(), catch: () => fail(message) })
+
 // Reads a secret from the clipboard or a pipe without displaying, echoing, or clearing it.
 export const privateInput = Effect.fn("privateInput")(function* (source: Source, noun: string, outcome: string) {
-  if (source === "clipboard" && process.platform !== "darwin") {
-    return yield* fail(`--clipboard requires macOS; use --stdin on other platforms; ${outcome}`)
+  if (source === "clipboard" && process.platform !== "darwin" && !windows) {
+    return yield* fail(`--clipboard requires macOS or Windows; use --stdin on other platforms; ${outcome}`)
   }
   if (source === "stdin" && process.stdin.isTTY) {
     return yield* fail(`Pipe the ${noun} to --stdin; interactive input is not supported; ${outcome}`)
   }
-  const input = yield* capture(
+  const message = `Could not read the ${noun} (details suppressed); ${outcome}`
+  const input =
     source === "clipboard"
-      ? ChildProcess.make("pbpaste", [], { stdin: "ignore", stderr: "ignore" })
-      : ChildProcess.make("cat", [], { stdin: "inherit", stderr: "ignore" }),
-    `Could not read the ${noun} (details suppressed); ${outcome}`,
-  )
+      ? yield* capture(clipboardCommand(), message)
+      : windows
+        ? yield* readStdin(message)
+        : yield* capture(ChildProcess.make("cat", [], { stdin: "inherit", stderr: "ignore" }), message)
   if (!input.trim()) return yield* fail(`The ${noun} input is empty; ${outcome}`)
   return input
 })
@@ -80,13 +102,21 @@ export const op = Effect.fn("op")(
     const result = yield* output(
       options.input === undefined
         ? ChildProcess.make("op", argv, { env, extendEnv: true, stdin: "ignore", stderr })
-        : // op accepts piped input only from a real pipe. Arguments stay positional, outside shell syntax.
-          ChildProcess.make("sh", ["-c", 'cat | exec op "$@"', "2password-op", ...argv], {
-            env,
-            extendEnv: true,
-            stdin: Stream.make(new TextEncoder().encode(options.input)),
-            stderr,
-          }),
+        : windows
+          ? // On Windows the spawner's stdin is already a real pipe and there is no sh.
+            ChildProcess.make("op", argv, {
+              env,
+              extendEnv: true,
+              stdin: Stream.make(new TextEncoder().encode(options.input)),
+              stderr,
+            })
+          : // op accepts piped input only from a real pipe. Arguments stay positional, outside shell syntax.
+            ChildProcess.make("sh", ["-c", 'cat | exec op "$@"', "2password-op", ...argv], {
+              env,
+              extendEnv: true,
+              stdin: Stream.make(new TextEncoder().encode(options.input)),
+              stderr,
+            }),
     )
     if (result.exitCode === 0) return result.stdout
     return yield* new Failure({
@@ -119,7 +149,10 @@ export const exec = Effect.fn("exec")(
   function* (args: ReadonlyArray<string>, command: ReadonlyArray<string>, env?: Environment) {
     const authentication = yield* (yield* Credentials).environment
     const child = authentication.OP_SERVICE_ACCOUNT_TOKEN
-      ? ["env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", ...command]
+      ? windows
+        ? // No `env -u` on Windows: a Bun helper drops the token, then runs the command.
+          [process.execPath, fileURLToPath(new URL("./without-token.ts", import.meta.url)), ...command]
+        : ["env", "-u", "OP_SERVICE_ACCOUNT_TOKEN", ...command]
       : command
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     return Number(

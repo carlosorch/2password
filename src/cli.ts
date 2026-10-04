@@ -21,7 +21,9 @@ const vaultFilter = optional(Flag.String("vault")).pipe(Flag.withDescription("Li
 const accountName = Flag.String("name").pipe(Flag.withDefault("2password Automation"))
 
 const sourceFlags = {
-  clipboard: toggle("clipboard").pipe(Flag.withDescription("Read the macOS clipboard without printing or clearing it")),
+  clipboard: toggle("clipboard").pipe(
+    Flag.withDescription("Read the macOS or Windows clipboard without printing or clearing it"),
+  ),
   stdin: toggle("stdin").pipe(Flag.withDescription("Read piped stdin, never an argument")),
 }
 const source = ({ clipboard, stdin }: { readonly clipboard: boolean; readonly stdin: boolean }) =>
@@ -160,7 +162,7 @@ const env = Command.make("env").pipe(
   Command.withSubcommands([envWrite, envResolve, envRun]),
 )
 
-// Unattended access: a dedicated service account remembered in macOS Keychain.
+// Unattended access: a dedicated service account remembered in macOS Keychain or, on Windows, a DPAPI-encrypted file.
 
 const serviceSetup = Command.make(
   "setup",
@@ -180,7 +182,7 @@ const serviceSetup = Command.make(
   (options) => ServiceAccount.setup(options).pipe(Effect.flatMap(print)),
 ).pipe(
   Command.withDescription(
-    "Create an account, back up its token, and remember it in macOS Keychain using desktop authentication",
+    "Create an account, back up its token, and remember it in macOS Keychain (DPAPI on Windows) using desktop authentication",
   ),
 )
 
