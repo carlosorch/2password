@@ -32,19 +32,52 @@ export interface Scope {
   readonly vault?: string | undefined
 }
 
+// The vault and field are already part of `ref`.
 export interface SecretMatch {
   readonly ref: string
   readonly title: string
-  readonly vault: string
   readonly kind: string
-  readonly field: string
 }
 
 const invalid = () => Op.fail("1Password returned invalid JSON")
 const kind = (category: string) => category.toLowerCase().replaceAll("_", "-")
 
-const byLocation = (a: SecretMatch, b: SecretMatch) =>
-  a.vault.localeCompare(b.vault) || a.title.localeCompare(b.title) || a.field.localeCompare(b.field)
+const words = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+
+const distance = (a: string, b: string) => {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i]
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(previous[j]! + 1, current[j - 1]! + 1, previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    previous = current
+  }
+  return previous[b.length]!
+}
+
+// How close a title comes to a query that matched nothing (0..1): each term
+// scores its best title word, so typos like "databse" still find "Database".
+const closeness = (terms: ReadonlyArray<string>, title: string) => {
+  const candidates = words(title)
+  const score = (term: string) =>
+    Math.max(
+      0,
+      ...candidates.map((word) =>
+        word.includes(term) || (word.length >= 3 && term.includes(word))
+          ? 1
+          : 1 - distance(term, word) / Math.max(term.length, word.length),
+      ),
+    )
+  return terms.reduce((sum, term) => sum + score(term), 0) / terms.length
+}
+
+const SUGGESTION_THRESHOLD = 0.6
+const SUGGESTIONS_PER_MISS = 3
 
 const safeUrl = (input: string): string => {
   try {
@@ -112,39 +145,55 @@ const details = Effect.fn("details")(function* (entries: ReadonlyArray<{ readonl
   )
 })
 
+// Matches are listed once, with the queries they answer when several were asked.
+// A query that matches nothing returns close titles as suggestions instead,
+// fetched in the same batch, so a typo never costs another approval.
 export const find = Effect.fn("Discover.find")(function* (queries: ReadonlyArray<string>, scope: Scope = {}) {
   const listed = yield* list(scope)
-  const results = queries.map((query) => {
+  const searches = [...new Set(queries)].map((query) => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-    return {
-      query,
-      items: listed.filter(({ summary }) => terms.every((term) => summary.title.toLowerCase().includes(term))),
-    }
+    const items = listed.filter(({ summary }) => terms.every((term) => summary.title.toLowerCase().includes(term)))
+    const suggested =
+      items.length > 0
+        ? []
+        : listed
+            .map((entry) => ({ entry, score: closeness(terms, entry.summary.title) }))
+            .filter(({ score }) => score >= SUGGESTION_THRESHOLD)
+            .toSorted((a, b) => b.score - a.score || a.entry.summary.title.localeCompare(b.entry.summary.title))
+            .slice(0, SUGGESTIONS_PER_MISS)
+            .map(({ entry }) => entry)
+    return { query, items, suggested }
   })
-  const wanted = listed.filter((entry) => results.some(({ items }) => items.includes(entry)))
+  const wanted = listed.filter((entry) =>
+    searches.some(({ items, suggested }) => items.includes(entry) || suggested.includes(entry)),
+  )
   const secrets = new Map(
     (yield* details(wanted, scope)).map((item) => [
       item.id,
       item.fields.flatMap((field): ReadonlyArray<SecretMatch> =>
         field.reference !== undefined && (field.type === "CONCEALED" || field.purpose === "PASSWORD")
-          ? [
-              {
-                ref: field.reference,
-                title: item.title,
-                vault: item.vault.name,
-                kind: kind(item.category),
-                field: field.label ?? field.id,
-              },
-            ]
+          ? [{ ref: field.reference, title: item.title, kind: kind(item.category) }]
           : [],
       ),
     ]),
   )
-  const matchesOf = (items: typeof listed) =>
-    items.flatMap(({ summary }) => secrets.get(summary.id) ?? []).toSorted(byLocation)
+  const secretsOf = (items: typeof listed) => items.flatMap(({ summary }) => secrets.get(summary.id) ?? [])
+  const matches = new Map<string, SecretMatch & { queries: Array<string> }>()
+  for (const { query, items } of searches) {
+    for (const match of secretsOf(items)) {
+      const existing = matches.get(match.ref)
+      if (existing) existing.queries.push(query)
+      else matches.set(match.ref, { ...match, queries: [query] })
+    }
+  }
+  const suggestions = searches.flatMap(({ query, suggested }) =>
+    secretsOf(suggested).map((match) => ({ query, ...match })),
+  )
   return {
-    matches: matchesOf(wanted).filter((match, index, all) => all.findIndex(({ ref }) => ref === match.ref) === index),
-    results: results.map(({ query, items }) => ({ query, matches: matchesOf(items) })),
+    matches: [...matches.values()]
+      .map(({ queries: answered, ...match }) => (searches.length === 1 ? match : { ...match, queries: answered }))
+      .toSorted((a, b) => a.ref.localeCompare(b.ref)),
+    ...(suggestions.length === 0 ? {} : { suggestions }),
   }
 })
 

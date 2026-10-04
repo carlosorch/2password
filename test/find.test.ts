@@ -35,22 +35,54 @@ describe("find", () => {
           ["3", 4],
         ],
       )
-      const output = JSON.parse(stdout)
-      assert.deepStrictEqual(
-        output.matches.map((match: { ref: string }) => match.ref),
-        ["op://Personal/Cloud API/credential", "op://Work/Cloud Login/password", "op://Work/Database/password"],
-      )
-      assert.deepStrictEqual(
-        output.results.map((result: { query: string; matches: ReadonlyArray<unknown> }) => [
-          result.query,
-          result.matches.length,
-        ]),
-        [
-          ["database", 1],
-          ["cloud api", 1],
-          ["cloud", 2],
+      // Each secret appears once, with the queries it answers.
+      assert.deepStrictEqual(JSON.parse(stdout), {
+        matches: [
+          {
+            ref: "op://Personal/Cloud API/credential",
+            title: "Cloud API",
+            kind: "api-credential",
+            queries: ["cloud api", "cloud"],
+          },
+          { ref: "op://Work/Cloud Login/password", title: "Cloud Login", kind: "login", queries: ["cloud"] },
+          { ref: "op://Work/Database/password", title: "Database", kind: "database", queries: ["database"] },
         ],
+      })
+    } finally {
+      await box.close()
+    }
+  })
+
+  it("suggests close titles for a miss within the same batch", async () => {
+    const box = await sandbox({ op })
+    try {
+      const { stdout, stderr } = await box.run(["find", "databse", "nothing like this"])
+      assert.strictEqual(stderr, "")
+      assert.deepStrictEqual((await readFile(join(box.home, "op.log"), "utf8")).trim().split("\n"), [
+        "item list --format json",
+        "item get - --format json",
+      ])
+      // Only the suggested item is fetched.
+      assert.deepStrictEqual(
+        JSON.parse(await readFile(join(box.home, "input"), "utf8")).map((item: { id: string }) => item.id),
+        ["3"],
       )
+      assert.deepStrictEqual(JSON.parse(stdout), {
+        matches: [],
+        suggestions: [{ query: "databse", ref: "op://Work/Database/password", title: "Database", kind: "database" }],
+      })
+    } finally {
+      await box.close()
+    }
+  })
+
+  it("lists a single query's matches without repeating the query", async () => {
+    const box = await sandbox({ op })
+    try {
+      const { stdout } = await box.run(["find", "database"])
+      assert.deepStrictEqual(JSON.parse(stdout), {
+        matches: [{ ref: "op://Work/Database/password", title: "Database", kind: "database" }],
+      })
     } finally {
       await box.close()
     }
