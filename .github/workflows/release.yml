@@ -21,6 +21,8 @@ jobs:
           package-manager-cache: false
       - run: bun install --frozen-lockfile
       - run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
       - run: npm publish
       - run: gh release create "$GITHUB_REF_NAME" --generate-notes
         env:
