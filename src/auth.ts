@@ -66,7 +66,7 @@ const keychain = (
   return Op.capture(
     Op.windows
       ? ChildProcess.make(
-          "powershell",
+          Op.program("powershell"),
           [
             "-NoProfile",
             "-NonInteractive",

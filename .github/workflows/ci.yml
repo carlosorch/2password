@@ -10,8 +10,12 @@ permissions:
 
 jobs:
   check:
-    # macOS covers the clipboard and Keychain paths, which are skipped elsewhere.
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each covers its own clipboard and token-store paths, which are skipped elsewhere.
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -19,3 +23,6 @@ jobs:
       - run: bun run check
       # npm publish silently rewrites invalid package.json fields (it once dropped our bin).
       - run: npm pkg fix && git diff --exit-code package.json
+      # The real DPAPI token store, with a disposable fictional token. CI only: it touches the user's store.
+      - if: runner.os == 'Windows'
+        run: bun run test:keychain

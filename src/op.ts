@@ -46,12 +46,17 @@ export type Source = "clipboard" | "stdin"
 
 export const windows = process.platform === "win32"
 
+// Windows looks in the current directory before PATH, so a planted op.exe or
+// powershell.exe in an untrusted repository would run instead. Resolve through
+// PATH only, and fail closed (the spawn fails) when the program is missing.
+export const program = (name: string) => (windows ? (Bun.which(name) ?? `${name}-not-found-on-PATH`) : name)
+
 // Windows has no pbpaste or cat. PowerShell writes the clipboard as UTF-8 without a trailing newline;
 // stdin is read in-process so no extra executable is needed.
 const clipboardCommand = () =>
   windows
     ? ChildProcess.make(
-        "powershell",
+        program("powershell"),
         [
           "-NoProfile",
           "-NonInteractive",
@@ -101,10 +106,10 @@ export const op = Effect.fn("op")(
     const stderr = options.failure === undefined ? "pipe" : "ignore"
     const result = yield* output(
       options.input === undefined
-        ? ChildProcess.make("op", argv, { env, extendEnv: true, stdin: "ignore", stderr })
+        ? ChildProcess.make(program("op"), argv, { env, extendEnv: true, stdin: "ignore", stderr })
         : windows
           ? // On Windows the spawner's stdin is already a real pipe and there is no sh.
-            ChildProcess.make("op", argv, {
+            ChildProcess.make(program("op"), argv, {
               env,
               extendEnv: true,
               stdin: Stream.make(new TextEncoder().encode(options.input)),
@@ -157,7 +162,7 @@ export const exec = Effect.fn("exec")(
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     return Number(
       yield* spawner.exitCode(
-        ChildProcess.make("op", [...args, "--", ...child], {
+        ChildProcess.make(program("op"), [...args, "--", ...child], {
           env: { ...authentication, ...env },
           extendEnv: true,
           stdin: "inherit",
