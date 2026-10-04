@@ -6,6 +6,7 @@ import { decodeTrailingArguments, normalizeTrailingArguments } from "./arguments
 import { Auth } from "./auth.js"
 import { Create } from "./create.js"
 import { Discover } from "./discover.js"
+import { Doctor } from "./doctor.js"
 import { Env, parseAssignment } from "./env.js"
 import { Op } from "./op.js"
 import { Password } from "./password.js"
@@ -99,6 +100,10 @@ const password = Command.make(
       yield* print(yield* Password.password({ ...options, source: yield* source({ clipboard, stdin }) }))
     }),
 ).pipe(Command.withDescription("Compare or update a Login password from private input without revealing it"))
+
+const doctor = Command.make("doctor", {}, () => Doctor.doctor(packageJson.version).pipe(Effect.flatMap(print))).pipe(
+  Command.withDescription("Check the setup without authenticating or prompting; safe to paste into an issue"),
+)
 
 // Consumption: values go to a process or file, not to the conversation.
 
@@ -216,7 +221,7 @@ const root = Command.make("2password").pipe(
       Flag.withDescription("Use desktop authentication instead of the saved or environment service account"),
     ),
   }),
-  Command.withSubcommands([inventory, audit, find, create, password, read, run, env, serviceAccount]),
+  Command.withSubcommands([find, inventory, audit, create, password, read, run, env, serviceAccount, doctor]),
   Command.provideEffect(Op.Credentials, ({ desktop }) => Auth.make(desktop)),
 )
 
