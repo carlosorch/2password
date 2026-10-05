@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, feat/bitwarden-secrets-manager]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
