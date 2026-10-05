@@ -1,15 +1,31 @@
 ---
 name: 2password
-description: Use for any password, API key, token, credential, secret, or 1Password task, including finding credentials, injecting them into commands or env files, saving new API keys, checking or updating login passwords, auditing vaults, and setting up unattended access. Prefer the 2password CLI over raw op whenever it covers the task.
+description: Use for any password, API key, token, credential, secret, 1Password or Bitwarden Secrets Manager task, including finding credentials, injecting them into commands or env files, saving new API keys, checking or updating login passwords, auditing vaults, and setting up unattended access. Prefer the 2password CLI over raw op whenever it covers the task.
 ---
 
 # 2password
 
 `2password` wraps the 1Password CLI (`op`) so you can work with secrets without seeing them, and with as few 1Password prompts as possible. All output is JSON.
 
+## Bitwarden Secrets Manager in this fork
+
+Use `2password bitwarden` for automation secrets. This uses the official SDK and does not unlock the personal Bitwarden vault. `bw` and `bws` are not required.
+
+- Ask the user to supply `BWS_ACCESS_TOKEN` through a masked input tool or trusted launcher. Never ask for it in chat, echo it, or put it in argv. No token is persisted by this CLI.
+- `bitwarden doctor` never authenticates. It reports SDK availability and whether a token is configured. Do not interpret that as a verified login.
+- Use `bitwarden find <queries> --organization <uuid>` or `inventory` for metadata and `bws://UUID` references. Do not use `read` for discovery.
+- Use `bitwarden run --env "NAME=bws://UUID" -- <trusted-command>` or `bitwarden env run <template> -- <trusted-command>`. The template accepts reference assignments only, no plaintext or shell expansion.
+- Create with `bitwarden create --organization <uuid> --project <uuid> --title <non-secret-name> --stdin`. Pipe input directly from a trusted producer; macOS and Windows also support `--clipboard`.
+- Update requires the explicit reference: `bitwarden update bws://UUID --organization <uuid> --project <uuid> --title <name> --stdin`. It replaces notes; omitted notes become empty.
+- Writes are read back and return a metadata receipt with `verified: true`. Never retry an uncertain write. Creation rejects visible duplicate names, but concurrent writers and inaccessible secrets can still duplicate names.
+- The selected child receives plaintext and can leak it. The CLI removes `BWS_*`, `BW_*` and `OP_*` variables from that child, but does not isolate an unrestricted agent running under the same OS user.
+- Only US-cloud endpoints are implemented. The SDK supports Linux x64 glibc, macOS x64/arm64 and Windows x64.
+
+See `docs/bitwarden.md` in the repository for setup, commands and limitations. Original 1Password commands below are unchanged.
+
 ## Rules
 
-- Never print, log, summarize, or repeat secret values. Pass `op://` references around instead.
+- Never print, log, summarize, or repeat secret values. Pass `op://` references for 1Password or `bws://` references for Bitwarden instead.
 - Any 1Password call may show the user an approval prompt, and each new shell you open can need a fresh approval. Batch a task's work into as few commands as possible: many queries in one `find`, many references in one env file run with `env run`.
 - Never run `op whoami` or any other preflight check. Just run the command; the desktop app authorizes it when needed.
 - Never retry a write that failed or reported "unverified". Run `find` first to check whether it already happened.

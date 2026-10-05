@@ -1,6 +1,8 @@
 # 2password
 
-A Bun + Effect v4 CLI over 1Password's `op`.
+A Bun + Effect v4 CLI over 1Password's `op`, forked to add Bitwarden Secrets Manager via the official SDK.
+
+The fork uses pnpm 11.10.0 and `pnpm-lock.yaml` as its only lockfile. Install with `pnpm install --frozen-lockfile --ignore-scripts`. Package scripts are not needed for the pinned native SDK binaries. The package is private and automatic publishing is disabled. Never publish it as the upstream `2password` package.
 
 ## Purpose
 
@@ -16,8 +18,8 @@ Optimize, in order:
 Not goals: being a vault, being a sandbox (a child given a secret by `run` can do anything with it), or replacing `op` for administration. Keep the interface small: it is the product.
 
 ```sh
-bun install
-bun run check                 # format check, lint, typecheck, tests: what CI runs
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run check                 # format check, lint, typecheck, tests: what CI runs
 bun run format                # oxfmt
 bun run test                  # never touches real 1Password, clipboard, or Keychain
 bun run bin/2password --help
@@ -28,6 +30,9 @@ bun run bin/2password --help
 ```
 bin/2password               entry point
 src/cli.ts                  command table: flags -> module call -> JSON on stdout; no logic
+src/bitwarden-cli.ts         Bitwarden subcommands and private-input handling
+src/bitwarden.ts             validated metadata, reference resolution, verified writes, process injection
+src/bitwarden-worker.ts      isolated SDK bridge; stdin requests, private stdout, no diagnostics
 src/op.ts                   the subprocess seam: op / json / exec, privateInput, Failure, Credentials
 src/auth.ts                 which credentials op runs with (desktop, env token, Keychain token) and their local storage
 src/keychain.jxa.js         native Keychain bridge, run through osascript; the token crosses stdin only
@@ -65,7 +70,9 @@ These are security properties. Do not weaken them.
 
 ## Release
 
-Published to npm as `2password` by `.github/workflows/release.yml` (npm trusted publishing, so no tokens). The skill installs from this repo with `bunx skills add kitlangton/2password`.
+This fork is not published. Do not run the upstream release instructions below; they describe the original project only.
+
+Upstream was published to npm as `2password` by `.github/workflows/release.yml` (npm trusted publishing, so no tokens). The skill installs from this repo with `bunx skills add kitlangton/2password`.
 
 ```sh
 npm version patch      # or minor; commits and tags vX.Y.Z

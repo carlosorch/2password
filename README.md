@@ -1,15 +1,31 @@
 # 2password
 
-1Password for coding agents. Your agent finds, uses, and saves secrets without ever seeing them, and asks you to approve far less often.
+Fork of [kitlangton/2password](https://github.com/kitlangton/2password) with Bitwarden Secrets Manager support. The original 1Password commands remain available.
+
+Bitwarden commands use the official SDK, not the personal-vault `bw` CLI. No 1Password installation is needed for Bitwarden. See [the Bitwarden guide](docs/bitwarden.md) for setup and security limits.
 
 ## Install
 
-Requires [Bun](https://bun.sh) and the [1Password CLI](https://developer.1password.com/docs/cli/get-started/).
+Requires [Bun](https://bun.sh), Node.js 24 and pnpm 11.10.0. The [1Password CLI](https://developer.1password.com/docs/cli/get-started/) is only needed for the original commands.
 
 ```sh
-bun add -g 2password                  # the CLI
-bunx skills add kitlangton/2password  # teaches your agent to use it
+git clone https://github.com/carlosorch/2password.git
+cd 2password
+pnpm install --frozen-lockfile --ignore-scripts
+bun run bin/2password bitwarden doctor
 ```
+
+Run the CLI from this checkout with `bun run bin/2password`. This fork is not published to npm and has no automatic publishing workflow.
+
+## Bitwarden Secrets Manager
+
+```sh
+bun run bin/2password bitwarden find openai --organization <organization-uuid>
+bun run bin/2password bitwarden run --env "OPENAI_API_KEY=bws://<secret-uuid>" -- pnpm run dev
+bun run bin/2password bitwarden env run .env.tpl -- pnpm run dev
+```
+
+Configure a scoped machine-account token through a masked secret-input tool or your existing secret launcher. Never paste it into an agent conversation. The CLI reads `BWS_ACCESS_TOKEN`; it does not persist the token.
 
 ## Use
 

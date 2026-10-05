@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/bitwarden-secrets-manager]
   pull_request:
 
 permissions:
@@ -13,16 +13,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Each covers its own clipboard and token-store paths, which are skipped elsewhere.
-        os: [macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bun run check
-      # npm publish silently rewrites invalid package.json fields (it once dropped our bin).
-      - run: npm pkg fix && git diff --exit-code package.json
-      # The real DPAPI token store, with a disposable fictional token. CI only: it touches the user's store.
+        with:
+          bun-version: 1.4.2
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run check
       - if: runner.os == 'Windows'
-        run: bun run test:keychain
+        run: pnpm run test:keychain

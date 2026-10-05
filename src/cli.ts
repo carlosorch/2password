@@ -4,6 +4,7 @@ import { Argument, Command, Flag } from "effect/cli"
 import packageJson from "../package.json" with { type: "json" }
 import { decodeTrailingArguments, normalizeTrailingArguments } from "./arguments.js"
 import { Auth } from "./auth.js"
+import { bitwarden } from "./bitwarden-cli.js"
 import { Create } from "./create.js"
 import { Discover } from "./discover.js"
 import { Doctor } from "./doctor.js"
@@ -221,7 +222,19 @@ const root = Command.make("2password").pipe(
       Flag.withDescription("Use desktop authentication instead of the saved or environment service account"),
     ),
   }),
-  Command.withSubcommands([find, inventory, audit, create, password, read, run, env, serviceAccount, doctor]),
+  Command.withSubcommands([
+    find,
+    inventory,
+    audit,
+    create,
+    password,
+    read,
+    run,
+    env,
+    serviceAccount,
+    doctor,
+    bitwarden,
+  ]),
   Command.provideEffect(Op.Credentials, ({ desktop }) => Auth.make(desktop)),
 )
 
