@@ -29,7 +29,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:keychain": "TWO_PASSWORD_KEYCHAIN_TEST=1 vitest run test/keychain.test.ts",
+    "test:keychain": "bun exec \"TWO_PASSWORD_KEYCHAIN_TEST=1 vitest run test/keychain.test.ts\"",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings",
     "format": "oxfmt",
